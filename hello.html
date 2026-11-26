@@ -1,0 +1,1133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ITS Data Analytics — Interactive Reviewer</title>
+<style>
+  :root {
+    --bg: #f8fafc;
+    --surface: #ffffff;
+    --border: #e2e8f0;
+    --text: #0f172a;
+    --muted: #64748b;
+    --accent: #2563eb;
+    --accent-hover: #1d4ed8;
+    --correct-bg: #f0fdf4;
+    --correct-border: #22c55e;
+    --correct-text: #15803d;
+    --wrong-bg: #fef2f2;
+    --wrong-border: #ef4444;
+    --wrong-text: #b91c1c;
+    --radius: 10px;
+  }
+
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+    min-height: 100vh;
+    display: flex;
+    flex-direction: column;
+  }
+
+  header {
+    background: var(--surface);
+    border-bottom: 1px solid var(--border);
+    padding: 1rem 1.5rem;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+  }
+
+  .brand { font-weight: 700; font-size: 1.05rem; letter-spacing: -0.02em; }
+  .controls { display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; }
+
+  button, select {
+    font-family: inherit;
+    font-size: 0.875rem;
+    border-radius: 6px;
+    border: 1px solid var(--border);
+    background: var(--surface);
+    color: var(--text);
+    padding: 0.45rem 0.85rem;
+    cursor: pointer;
+    transition: all 0.15s ease;
+  }
+  button:hover { border-color: #cbd5e1; background: #f1f5f9; }
+  button.primary { background: var(--accent); color: #fff; border-color: var(--accent); }
+  button.primary:hover { background: var(--accent-hover); }
+  button.active { background: var(--text); color: #fff; border-color: var(--text); }
+
+  .progress-wrap { height: 4px; background: var(--border); width: 100%; }
+  .progress-bar { height: 100%; background: var(--accent); width: 0%; transition: width 0.25s ease; }
+
+  main {
+    max-width: 820px;
+    width: 100%;
+    margin: 2rem auto;
+    padding: 0 1rem 4rem;
+    flex: 1;
+  }
+
+  .stats-bar {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+    font-size: 0.875rem;
+    color: var(--muted);
+  }
+
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+    padding: 1.75rem;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.03);
+  }
+
+  .q-meta {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.75rem;
+  }
+  .q-num { font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; color: var(--accent); }
+  .q-badge { font-size: 0.75rem; padding: 0.2rem 0.55rem; border-radius: 99px; background: #f1f5f9; color: var(--muted); }
+
+  .q-text { font-size: 1.05rem; font-weight: 500; margin-bottom: 1.25rem; white-space: pre-line; }
+
+  .code-block {
+    background: #0f172a;
+    color: #e2e8f0;
+    padding: 1rem;
+    border-radius: 8px;
+    font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+    font-size: 0.85rem;
+    overflow-x: auto;
+    margin-bottom: 1.25rem;
+    white-space: pre;
+  }
+
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin-bottom: 1.25rem;
+    font-size: 0.85rem;
+  }
+  .data-table th, .data-table td {
+    border: 1px solid var(--border);
+    padding: 0.45rem 0.65rem;
+    text-align: left;
+  }
+  .data-table th { background: #f8fafc; font-weight: 600; }
+
+  .options { display: flex; flex-direction: column; gap: 0.6rem; }
+  .opt-btn {
+    text-align: left;
+    padding: 0.85rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    background: var(--surface);
+    display: flex;
+    align-items: flex-start;
+    gap: 0.75rem;
+    font-size: 0.95rem;
+  }
+  .opt-btn:hover:not(:disabled) { border-color: var(--accent); background: #f8fafc; }
+  .opt-btn.selected { border-color: var(--accent); background: #eff6ff; }
+  .opt-btn.correct { border-color: var(--correct-border); background: var(--correct-bg); color: var(--correct-text); }
+  .opt-btn.wrong { border-color: var(--wrong-border); background: var(--wrong-bg); color: var(--wrong-text); }
+
+  .match-row, .matrix-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 1rem;
+    padding: 0.75rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    margin-bottom: 0.6rem;
+    background: var(--surface);
+  }
+  .match-row.correct, .matrix-row.correct { border-color: var(--correct-border); background: var(--correct-bg); }
+  .match-row.wrong, .matrix-row.wrong { border-color: var(--wrong-border); background: var(--wrong-bg); }
+
+  .matrix-choices { display: flex; gap: 0.5rem; flex-shrink: 0; }
+  .text-input {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 1rem;
+    font-family: inherit;
+  }
+
+  .feedback {
+    margin-top: 1.25rem;
+    padding: 0.9rem 1rem;
+    border-radius: 8px;
+    font-size: 0.9rem;
+    display: none;
+  }
+  .feedback.show { display: block; }
+  .feedback.correct { background: var(--correct-bg); border: 1px solid var(--correct-border); color: var(--correct-text); }
+  .feedback.wrong { background: var(--wrong-bg); border: 1px solid var(--wrong-border); color: var(--wrong-text); }
+
+  .actions {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-top: 1.5rem;
+    padding-top: 1.25rem;
+    border-top: 1px solid var(--border);
+  }
+
+  .nav-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(38px, 1fr));
+    gap: 0.4rem;
+    margin-top: 1.5rem;
+    padding: 1rem;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: var(--radius);
+  }
+  .nav-dot {
+    padding: 0.35rem 0;
+    font-size: 0.8rem;
+    text-align: center;
+    border-radius: 6px;
+  }
+  .nav-dot.current { border-color: var(--accent); font-weight: 700; box-shadow: 0 0 0 2px rgba(37,99,235,0.2); }
+  .nav-dot.answered { background: #eff6ff; border-color: #bfdbfe; }
+  .nav-dot.correct { background: var(--correct-bg); border-color: var(--correct-border); color: var(--correct-text); }
+  .nav-dot.wrong { background: var(--wrong-bg); border-color: var(--wrong-border); color: var(--wrong-text); }
+
+  .summary-box { text-align: center; padding: 2rem 1rem; }
+  .summary-score { font-size: 3rem; font-weight: 700; color: var(--accent); margin: 0.5rem 0; }
+</style>
+</head>
+<body>
+
+<header>
+  <div class="brand">ITS Data Analytics Reviewer</div>
+  <div class="controls">
+    <button id="modePractice" class="active" onclick="setMode('practice')">Practice Mode</button>
+    <button id="modeExam" onclick="setMode('exam')">Exam Mode</button>
+    <button onclick="shuffleQuestions()">Shuffle</button>
+    <button onclick="resetQuiz()">Reset</button>
+  </div>
+</header>
+<div class="progress-wrap"><div class="progress-bar" id="progressBar"></div></div>
+
+<main>
+  <div class="stats-bar">
+    <span id="counterText">Question 1 of 68</span>
+    <span id="scoreText">Score: 0 / 0</span>
+  </div>
+
+  <div class="card" id="quizCard"></div>
+
+  <div class="nav-grid" id="navGrid"></div>
+</main>
+
+<script>
+const QUESTIONS = [
+  {
+    id: 1, type: "multi",
+    text: "A domestic flight company wants to forecast flight delays and cancellations to provide the best experience to their customers.\nWhich three approaches would a data scientist use for this task? (Choose 3.)",
+    options: [
+      "A. Using structured data",
+      "B. Building predictive analysis models using machine learning",
+      "C. Using unstructured data",
+      "D. Using only current local weather",
+      "E. Proposing when a flight might be delayed without using data mining"
+    ],
+    answer: [0, 1, 2]
+  },
+  {
+    id: 2, type: "match",
+    text: "Match each type of data organization structure with its description.",
+    choices: ["Database", "Spreadsheet", "Row", "Tuple"],
+    pairs: [
+      { prompt: "A unique record with at least one data point", answer: "Row" },
+      { prompt: "A collection of data stored in cells", answer: "Spreadsheet" },
+      { prompt: "A collection of related data, appropriate for handling large amounts of data", answer: "Database" },
+      { prompt: "An ordered collection of data that cannot be modified", answer: "Tuple" }
+    ]
+  },
+  {
+    id: 3, type: "single",
+    text: "What concept allows analysts to drill down into data and examine different levels of information that may be crucial in diagnostic analytics?",
+    options: ["A. Transparency", "B. Interpretability", "C. Granularity", "D. Completeness"],
+    answer: 2
+  },
+  {
+    id: 4, type: "multi",
+    text: "A coworker is having trouble joining two database tables, TableA and TableB, that were imported from CSV files. They say the tables have no common values.\nYou look at the data in the original CSV files and find that the RowKey values in TableA and the RowID values in TableB look identical (three numbers followed by a dash '-' and two letters).\nWhich two actions should you complete next? (Choose 2.)",
+    options: [
+      "A. Verify that the data in the database was imported as a numeric data type.",
+      "B. Trim empty spaces from both sides of the valid characters.",
+      "C. Trim empty spaces from only the right side of the valid characters.",
+      "D. Visually compare the database values to the CSV values."
+    ],
+    answer: [1, 3]
+  },
+  {
+    id: 5, type: "matrix",
+    text: "The visualization (bar chart from $0 to $500,000 showing steady $25,000 steps from $150,000 in 2016 to $375,000 in 2025) and data table (2016–2024 increasing by $25,000/yr to $350,000; 2025 listed as $425,000) depict housing prices in a region.\nFor each statement about the visualization, select True or False.",
+    choices: ["TRUE", "FALSE"],
+    rows: [
+      { prompt: "The scaling of the graph is misleading.", answer: "TRUE" },
+      { prompt: "An increase of $25,000 occurs each year from 2016 to 2025.", answer: "FALSE" },
+      { prompt: "The visualization accurately depicts the housing prices shown in the table.", answer: "TRUE" }
+    ]
+  },
+  {
+    id: 6, type: "single",
+    text: "You believe playing video games increases a person's chance of having a heart attack. In your research, you notice equal evidence in favor of this hypothesis and opposed to it. You spend hours trying to identify the problems with the evidence opposed to your hypothesis, but readily accept the evidence in favor.\nWhich type of bias are you demonstrating?",
+    options: ["A. Affinity bias", "B. Sampling bias", "C. Motivated reasoning", "D. Anchoring bias"],
+    answer: 2
+  },
+  {
+    id: 7, type: "single",
+    text: "What is an example of data cleaning?",
+    options: [
+      "A. Adding quotation marks to the beginning and end of a tab-delimited file",
+      "B. Arranging Excel data rows in an order that is easy for a user to read",
+      "C. Removing non-printable characters from a comma-delimited file",
+      "D. Ensuring that the data in a Word table uses a consistent font"
+    ],
+    answer: 2
+  },
+  {
+    id: 8, type: "match",
+    text: "A file named Courses.data contains pipe-delimited content (Title|Number|Hours). You need to use Python to read the data from the file so you can import it into a database table.\nComplete the code by selecting the correct option for each blank.",
+    code: "import [Dropdown 1]\nwith open('Courses.data', 'r') as file:\n    reader = csv.reader(file, [Dropdown 2]='|')\n    for row in reader:\n        # import the data into the table",
+    choices: ["csv", "json", "sql", "xml", "column", "delimiter", "row"],
+    pairs: [
+      { prompt: "Dropdown 1 (import ___)", answer: "csv" },
+      { prompt: "Dropdown 2 (csv.reader parameter)", answer: "delimiter" }
+    ]
+  },
+  {
+    id: 9, type: "single",
+    text: "A colleague shows you a 3D column chart (y-axis starting at 8.4 up to 10.0) to indicate that Group A (~10.0) performed significantly better than Group B (~9.1) on a recent assignment. The chart creates a false impression of a significant score difference.\nWhich chart element causes the false impression?",
+    options: [
+      "A. The x-axis units of measurement",
+      "B. The y-axis units of measurement",
+      "C. The z-axis units of measurement",
+      "D. The color differentiation"
+    ],
+    answer: 1
+  },
+  {
+    id: 10, type: "single",
+    text: "You are analyzing sales activity to determine which products are purchased more frequently on national holidays.\nWhich level of data granularity will enable you to perform the most precise analysis?",
+    options: ["Years", "Months", "Weeks", "Days", "Hours"],
+    answer: 3
+  },
+  {
+    id: 11, type: "single",
+    text: "You have a dataset with Product, Review Score, Reviewer ID, Industry, and Ethnicity. You created a report showing Average Review Score per Product (AX-150: 77, BK-330: 62).\nThe product manager asks you to disaggregate the data in the report. Which action would be disaggregation?",
+    options: [
+      "A. Display the overall average and mode of all scores and a count of all reviews.",
+      "B. Display a list of industries that are included in the Other option.",
+      "C. Display the overall average and mode of all scores on a per-product basis.",
+      "D. Display average and mode of the scores for each product grouped by the ethnicity of the reviewers."
+    ],
+    answer: 3
+  },
+  {
+    id: 12, type: "match",
+    text: "You are a data analyst for a healthcare provider. Requirements:\n• Medical records must not be readable by unauthorized staff.\n• Patient names must be converted to cartoon character names, but doctors must be able to associate them to the actual patient.\n• Statisticians must only refer to patients by their cartoon character names.\nChoose the correct option for each requirement.",
+    choices: ["Anonymization", "Encryption", "Pseudonymization"],
+    pairs: [
+      { prompt: "You should use ___ for the doctors.", answer: "Pseudonymization" },
+      { prompt: "You should use ___ for the statisticians.", answer: "Anonymization" },
+      { prompt: "You should use ___ for the medical records.", answer: "Encryption" }
+    ]
+  },
+  {
+    id: 13, type: "single",
+    text: "What is metadata?",
+    options: ["A. Numerical facts", "B. A context that gives data meaning", "C. The text content of a message", "D. Statistics"],
+    answer: 1
+  },
+  {
+    id: 14, type: "multi",
+    text: "Each month, you need to automatically transform the data from two XML documents into a single flat file with columns and rows that Excel can open and interpret. The document names and structure remain constant.\nWhich two resources can you use? (Choose 2.)",
+    options: ["A. JSON", "B. Power Query for Excel (M)", "C. Python", "D. Microsoft Word"],
+    answer: [1, 2]
+  },
+  {
+    id: 15, type: "match",
+    text: "You are performing descriptive analytics on quarterly sales data (North, South, East, West). Match each summary row to the appropriate statistical metric.",
+    table: {
+      headers: ["Region", "Q1", "Q2", "Q3", "Q4"],
+      rows: [
+        ["North", "25,000", "30,000", "40,000", "50,000"],
+        ["South", "35,000", "45,000", "40,000", "55,000"],
+        ["East", "35,000", "32,500", "41,000", "52,500"],
+        ["West", "34,500", "30,000", "42,500", "55,000"]
+      ]
+    },
+    choices: ["Average", "Max", "Median", "Min", "Mode", "Sum"],
+    pairs: [
+      { prompt: "129,500 | 137,500 | 163,500 | 212,500", answer: "Sum" },
+      { prompt: "35,000 | 45,000 | 42,500 | 55,000", answer: "Max" },
+      { prompt: "25,000 | 30,000 | 40,000 | 50,000", answer: "Min" },
+      { prompt: "35,000 | 30,000 | 40,000 | 55,000", answer: "Median" }
+    ]
+  },
+  {
+    id: 16, type: "match",
+    text: "You are analyzing customer satisfaction scores (1 to 10) between online and in-store purchases. Select the correct metric for each statement.",
+    choices: ["Count", "Mean", "Median", "Mode", "Std Dev"],
+    pairs: [
+      { prompt: "The most frequent satisfaction score was 5 for online customers and 9 for in-store customers.", answer: "Mode" },
+      { prompt: "The average score for online customers was 6.4 and the average score for in-store customers was 7.0.", answer: "Mean" },
+      { prompt: "The score at the midpoint between the lowest and the highest scores was 6 for online and 7 for in-store.", answer: "Median" },
+      { prompt: "The online scores vary from the average by 2.3 and the in-store variance is 1.9.", answer: "Std Dev" }
+    ]
+  },
+  {
+    id: 17, type: "single",
+    text: "In which scenario will artificial intelligence (AI) provide the most time-saving benefit?",
+    options: [
+      "A. Aggregating fundraising sales data for a college soccer team",
+      "B. Predicting maintenance requirements for an international rental car company's fleet vehicle.",
+      "C. Determining the statistical mean, mode, and standard deviation of the grades for a class.",
+      "D. Recording daily sales for three stores owned by one franchise owner"
+    ],
+    answer: 1
+  },
+  {
+    id: 18, type: "multi",
+    text: "A software developer is designing a program for processing weather data (wind speed, temperature, precipitation, visibility). Requirements: stored in an organized format like tables/databases; consists of numerical values that can be measured and analyzed.\nWhich two categories of data are used in the program? (Choose 2.)",
+    options: ["A. Structured", "B. Quantitative", "C. Qualitative", "D. Unstructured"],
+    answer: [0, 1]
+  },
+  {
+    id: 19, type: "multi",
+    text: "You have a comma-delimited file with 100,000 rows and 200 columns of phone sales data. One column represents the phone manufacturer. You need to analyze all sales data for one manufacturer.\nWhich two techniques should you use? (Choose 2.)",
+    options: ["A. Filtering", "B. Truncating", "C. Slicing", "D. Deleting", "E. Transposing"],
+    answer: [0, 2]
+  },
+  {
+    id: 20, type: "single",
+    text: "Analyze the following Python code segment. Which variables store data in a numeric data type?",
+    code: "import datetime\nname = \"Gizmo\"\nage = 20\ncurrentDate = datetime.date(2025, 1, 1)\nbirthYear = currentDate.year - age\nbirthDate = datetime.date(birthYear, 1, 1)\nbirthTime = \"10:00 A.M.\"\ngraduationDate = datetime.datetime(2030, 6, 4, 14, 0, 0)\nyearsToGraduation = graduationDate.year - currentDate.year",
+    options: [
+      "A. age, currentDate, birthYear, birthDate, graduationDate, yearsToGraduation",
+      "B. age, birthYear, yearsToGraduation",
+      "C. age",
+      "D. age, currentDate, birthDate"
+    ],
+    answer: 1
+  },
+  {
+    id: 21, type: "match",
+    text: "You are a data analytics auditor for a large public company. Match each data description to the category of data it represents.",
+    choices: ["Qualitative Data", "Unstructured Data", "Metadata", "Structured Data"],
+    pairs: [
+      { prompt: "Results of a company-wide survey measuring feelings about the company's direction and future outlook", answer: "Qualitative Data" },
+      { prompt: "An archive called 'Spring Sales Campaign' containing .svg documents, retouched images, and a .pdf style guide", answer: "Unstructured Data" },
+      { prompt: "Information about the writer of each knowledge-base article and when it was last revised", answer: "Metadata" },
+      { prompt: "SQL database with calendar-year sales data", answer: "Structured Data" }
+    ]
+  },
+  {
+    id: 22, type: "single",
+    text: "What is one goal of data privacy and protection laws such as GDPR, FERPA, and HIPAA?",
+    options: [
+      "A. To hold violators accountable for mishandling data",
+      "B. To tax companies that use private data",
+      "C. To ensure that companies openly share industry data",
+      "D. To protect companies from liability related to private data"
+    ],
+    answer: 0
+  },
+  {
+    id: 23, type: "single",
+    text: "Which visualization type is commonly used to display the distribution of a continuous variable, with variable values on the x-axis and corresponding frequencies on the y-axis?",
+    options: ["Column Chart", "Line Chart", "Histogram", "Bar Chart"],
+    answer: 2
+  },
+  {
+    id: 24, type: "single",
+    text: "A data analyst is creating a Python program to retrieve patient health records (Patient Name, Height, Weight, Blood Pressure, Pulse, Heart Rate). They need to ensure that these values are not changed by the program.\nWhich data structure should you use to store the values for each patient?",
+    options: ["A. Rows", "B. Columns", "C. Tuples", "D. Lists"],
+    answer: 2
+  },
+  {
+    id: 25, type: "single",
+    text: "You conduct a study to identify how many people exercise daily. You recruit all the study participants at gyms.\nWhich type of bias are you demonstrating?",
+    options: ["A. Confirmation bias", "B. Anchoring bias", "C. Sampling bias", "D. Motivated reasoning"],
+    answer: 2
+  },
+  {
+    id: 26, type: "single",
+    text: "The marketing team wants to know which market segment had the highest sales last year.\nWhich type of data analytics should they use?",
+    options: ["A. Descriptive analytics", "B. Predictive analytics", "C. Diagnostic analytics", "D. Prescriptive analytics"],
+    answer: 0
+  },
+  {
+    id: 27, type: "single",
+    text: "You are reviewing a database of restaurant menu items (Item, Type, Menu, Gluten-Free, Vegan). You need to display only items on the Dessert menu with a Type of Cake.\nWhat should you do to nondestructively limit the data display?",
+    options: [
+      "A. Sort the data by Menu and within each Menu, sort by Type.",
+      "B. Add two slicers, one for Menu and one for Type. Set the Menu slicer to Dessert and the Type slicer to Cake.",
+      "C. Delete all data that has a Menu other than Dessert. Then delete all data that has a Type other than Cake.",
+      "D. Group the data by Menu and then group data on the Dessert menu by Type."
+    ],
+    answer: 1
+  },
+  {
+    id: 28, type: "input",
+    text: "You have produced a linear regression model which calculates house prices:\nHouse price = (100 + 0.5 * square meters + 8 * bedrooms + 10 * bathrooms) * 1,000\nWhat would the model predict for the price of a house with 800 square meters, 4 bedrooms, and 3 bathrooms?",
+    answer: ["562000", "562,000", "$562,000"]
+  },
+  {
+    id: 29, type: "match",
+    text: "You are using data analytics to help answer business questions about a new product your company released. Match each type of data analytics to the correct question.",
+    choices: ["Descriptive analytics", "Diagnostic analytics", "Predictive analytics", "Prescriptive analytics"],
+    pairs: [
+      { prompt: "Why did it happen?", answer: "Diagnostic analytics" },
+      { prompt: "What action should we take next?", answer: "Prescriptive analytics" },
+      { prompt: "What might happen in the future?", answer: "Predictive analytics" },
+      { prompt: "What happened in the initial product release?", answer: "Descriptive analytics" }
+    ]
+  },
+  {
+    id: 30, type: "single",
+    text: "Your company has summarized a large data set for the region you live in. You need to compare results from urban and rural communities within your region.\nWhat is the fastest way to obtain this information?",
+    options: [
+      "A. Disaggregate the data.",
+      "B. Collect a new data sample.",
+      "C. Review data from neighboring regions.",
+      "D. Aggregate the data."
+    ],
+    answer: 0
+  },
+  {
+    id: 31, type: "single",
+    text: "You have a small dataset that contains personally identifiable information (PII). You need to provide the data to an outside source for additional processing.\nWhat could you do to protect the PII but still allow you to eventually relate the additional analysis to your original data?",
+    options: [
+      "A. Remove every instance of PII in the original dataset and add them back after the new dataset is retrieved.",
+      "B. Employ pseudonymization on the PII and use the pseudonym as the key between the new and original datasets.",
+      "C. Randomly shuffle the original dataset so that each given piece of PII is no longer associated with a particular user.",
+      "D. Retain every text-based PII in the original dataset but convert them to number-based features in the new dataset."
+    ],
+    answer: 1
+  },
+  {
+    id: 32, type: "match",
+    text: "You create a PivotTable to show the combined number of certified virtual and in-person teachers for each class at each school.\nSchool A: Networking (6 In-Person, 5 Virtual), Data Analytics (2 In-Person, 3 Virtual).\nSchool B: Networking (9 In-Person, 7 Virtual), Data Analytics (2 In-Person, 4 Virtual).\nMatch the PivotTable totals to their labels.",
+    choices: ["School A - Networking", "School A - Data Analytics", "School B - Networking", "School B - Data Analytics"],
+    pairs: [
+      { prompt: "11", answer: "School A - Networking" },
+      { prompt: "5", answer: "School A - Data Analytics" },
+      { prompt: "16", answer: "School B - Networking" },
+      { prompt: "6", answer: "School B - Data Analytics" }
+    ]
+  },
+  {
+    id: 33, type: "single",
+    text: "You want to show a friend your monthly budget breakdown to prove that most of your expenditure is food costs. You create a table showing the flow of money from Total Monthly Budget (1,000) to categories and subcategories (Food & Entertainment -> Food Costs 400, etc.).\nWhich visualization type should you use?",
+    options: ["A. Sankey diagram", "B. Time series chart", "C. Correlation matrix", "D. Classification tree"],
+    answer: 0
+  },
+  {
+    id: 34, type: "multi",
+    text: "Select three ways that machine learning algorithms are used in data analysis. (Choose 3.)",
+    options: [
+      "A. Small Data Set Analysis",
+      "B. Regulated Data Analysis",
+      "C. Singular Historical Events",
+      "D. Anomaly Detection",
+      "E. Data Classification",
+      "F. Time Series Analysis"
+    ],
+    answer: [3, 4, 5]
+  },
+  {
+    id: 35, type: "matrix",
+    text: "For each statement about data disaggregation, select True or False.",
+    choices: ["TRUE", "FALSE"],
+    rows: [
+      { prompt: "Data disaggregation provides a summary of the data.", answer: "FALSE" },
+      { prompt: "Data disaggregation combines data from multiple sources.", answer: "FALSE" },
+      { prompt: "Data disaggregation can clarify trends and patterns among subgroups.", answer: "TRUE" }
+    ]
+  },
+  {
+    id: 36, type: "single",
+    text: "You work for a recreational sports company. You have a table of vehicle types, Num Sold, Price, and Total sales ($15,745,300). You need to show how each vehicle type contributes to the company's total sales.\nWhich visualization should you use?",
+    options: [
+      "Combo Chart (Quantity Sold bars + Price line)",
+      "Scatter Plot (Price vs. Quantity)",
+      "Pie Chart (Percentage contribution of each vehicle type)",
+      "Clustered Column Chart (Quantity Sold vs. Price)"
+    ],
+    answer: 2
+  },
+  {
+    id: 37, type: "matrix",
+    text: "Online vs In-Store Purchases (300 surveys each):\nOnline: Mean $228, Median $215, Mode $199, Std Dev $122\nIn-Store: Mean $188, Median $190, Mode $199, Std Dev $66\nSelect True if the statement is correct or False if incorrect.",
+    choices: ["TRUE", "FALSE"],
+    rows: [
+      { prompt: "In-store customers spent more money than online customers.", answer: "FALSE" },
+      { prompt: "Online customers have a larger variance in how much they spend.", answer: "TRUE" },
+      { prompt: "The difference between the largest amount spent and the smallest amount spent is higher for in-store customers.", answer: "FALSE" },
+      { prompt: "The amount spent the most often is the same for online and in-store customers.", answer: "TRUE" }
+    ]
+  },
+  {
+    id: 38, type: "multi",
+    text: "You need to create a data view based on aggregations for 5 years of food product sales. Requirements: include all products and categories, sales subtotals for each category and year, grand total for each category, and a summary of each category for every year.\nWhich two aggregation methods should you use? (Choose 2.)",
+    options: ["A. Pivoting", "B. Merging", "C. Grouping", "D. Filtering"],
+    answer: [0, 2]
+  },
+  {
+    id: 39, type: "match",
+    text: "You are working on a data science project for a bank. Choose the correct data type for each category of data.",
+    choices: ["Boolean", "Numeric", "String"],
+    pairs: [
+      { prompt: "Store customers' names, addresses, and types of transactions", answer: "String" },
+      { prompt: "Store True/False value and indicate if loan is approved or not", answer: "Boolean" },
+      { prompt: "Represent the approved loan amount", answer: "Numeric" }
+    ]
+  },
+  {
+    id: 40, type: "single",
+    text: "You run a t-test with an alpha value of 5% (α = 0.05) in order to test an alternative hypothesis (H1). You discover that the p-value is 0.017.\nWhat can you conclude about the null hypothesis (H0)?",
+    options: [
+      "A. You fail to reject the null hypothesis (H0).",
+      "B. You reject the null hypothesis (H0).",
+      "C. You accept the null hypothesis (H0).",
+      "D. You modify the null hypothesis (H0)."
+    ],
+    answer: 1
+  },
+  {
+    id: 41, type: "single",
+    text: "You are given four visualizations displaying time of day and customer wait times. You need to remove bias from the results by eliminating outliers.\nWhich of the four visualizations illustrates outliers in your dataset?",
+    options: [
+      "Box plot (Customer Wait by Time of Day)",
+      "Clustered column chart (Average Wait & Std Dev)",
+      "Scatter plot (Customer Wait vs. Number of Customers)",
+      "Line chart (Average Wait Time & Number of Customers)"
+    ],
+    answer: 0
+  },
+  {
+    id: 42, type: "multi",
+    text: "What are two goals of data privacy and protection laws such as GDPR, FERPA, and HIPAA? (Choose 2.)",
+    options: [
+      "A. To regulate data validation",
+      "B. To regulate how data is sorted",
+      "C. To regulate data storage",
+      "D. To regulate how data is shared"
+    ],
+    answer: [2, 3]
+  },
+  {
+    id: 43, type: "match",
+    text: "Match the type of data analysis to the analysis question it answers.",
+    choices: ["Descriptive Analysis", "Diagnostic Analysis", "Predictive Analysis", "Prescriptive Analysis", "Hypothesis Testing"],
+    pairs: [
+      { prompt: "What happened?", answer: "Descriptive Analysis" },
+      { prompt: "Why did it happen?", answer: "Diagnostic Analysis" },
+      { prompt: "What should we do next?", answer: "Prescriptive Analysis" },
+      { prompt: "Is there enough evidence to draw conclusions?", answer: "Hypothesis Testing" }
+    ]
+  },
+  {
+    id: 44, type: "match",
+    text: "Evaluate the SQL query and choose the type of data organization each query clause performs.",
+    choices: ["Aggregation", "Filtering", "Sorting", "Truncating"],
+    pairs: [
+      { prompt: "SELECT CustomerId, SUM(Amount) AS Total_Spent", answer: "Aggregation" },
+      { prompt: "FROM Sales WHERE Amount > 1", answer: "Filtering" },
+      { prompt: "GROUP BY CustomerId", answer: "Aggregation" },
+      { prompt: "ORDER BY Total_Spent DESC;", answer: "Sorting" }
+    ]
+  },
+  {
+    id: 45, type: "single",
+    text: "You need to compare three (3) values of each data point in a series.\nWhich chart type should you use?",
+    options: ["A. Area chart", "B. Waterfall chart", "C. Scatter chart", "D. Bubble chart"],
+    answer: 3
+  },
+  {
+    id: 46, type: "multi",
+    text: "During a data analysis project for a large organization, you must handle personally identifiable information (PII).\nThroughout the project, which three principles should you follow? (Choose 3.)",
+    options: [
+      "A. Limit your handling of the PII to only what is necessary for the current analysis.",
+      "B. Request all data from the database that contains the PII.",
+      "C. Keep track of the PII that you have during the analysis.",
+      "D. Retain only the PII that you might need for future analysis.",
+      "E. Remove all PII from your computer after the analysis is complete."
+    ],
+    answer: [0, 2, 4]
+  },
+  {
+    id: 47, type: "single",
+    text: "As part of an ETL process, which action represents transformation?",
+    options: [
+      "A. Converting data from a summary level to a detailed level",
+      "B. Converting data from one data type to another data type or structure",
+      "C. Changing the visualization from a bar graph to a line chart",
+      "D. Pivoting the data"
+    ],
+    answer: 1
+  },
+  {
+    id: 48, type: "multi",
+    text: "A stock market analyst wants to analyze the volatility in a stock price over the past 4 weeks, comparing extremely high and low days to usual price range days.\nWhich two visualization types meet the requirements? (Choose 2.)",
+    options: ["Box and Whisker", "Histogram", "Pie Chart", "Scatter Plot"],
+    answer: [0, 1]
+  },
+  {
+    id: 49, type: "single",
+    text: "Which sentence most accurately describes the relationship between data and statistics?",
+    options: [
+      "A. All statistics are data, but not all data are statistics.",
+      "B. All data are statistics, but not all statistics are data.",
+      "C. Data and statistics are both purely quantitative in nature.",
+      "D. Data and statistics are both purely qualitative in nature."
+    ],
+    answer: 0
+  },
+  {
+    id: 50, type: "single",
+    text: "You are reviewing an Ecommerce Sales Summary Table showing quarterly totals for years 2021–2025.\nWhich technique would allow you to view monthly sales for the year 2022?",
+    options: ["A. Data Correlation", "B. Data Drilling", "C. Regression Analysis", "D. Data Sampling"],
+    answer: 1
+  },
+  {
+    id: 51, type: "single",
+    text: "You create a column chart showing sales for different years (2019–2022). Management asks to see demographic information associated with individual sales records for each year. When someone clicks a year in the chart, an associated table opens.\nWhich reporting technique does this represent?",
+    options: ["A. Unpivoting", "B. Distributing", "C. Disaggregating", "D. Pivoting"],
+    answer: 2
+  },
+  {
+    id: 52, type: "single",
+    text: "You need to present quarterly e-commerce sales data (2021–2025) alongside the Break-Even Point to upper management using the most accurate, unbiased visualization.\nWhich visualization should you choose?",
+    options: [
+      "Clustered Column Chart by Quarter with a Break-Even line overlay",
+      "3D Pie Chart of total sales percentages",
+      "Clustered Column Chart mixing quarterly bars and Total bars on the same axis",
+      "100% Stacked Column Chart of quarters per year"
+    ],
+    answer: 0
+  },
+  {
+    id: 53, type: "single",
+    text: "Company Pro's partners want to know which case types are the most profitable (using Number of Cases, Gross Earnings, Expenses, Net Earnings, Average Earnings Per Case, Average Days Per Case).\nSelect the chart that minimizes misinterpretations and accurately depicts the profitability of each case type.",
+    options: [
+      "3D Pie Chart — CompanyPro Gross Earnings",
+      "Donut Chart — CompanyPro Totals (Revenue, Expenses, Net)",
+      "Horizontal Bar Chart — Average Days Per Case",
+      "Horizontal Bar Chart — Average Earnings Per Case"
+    ],
+    answer: 3
+  },
+  {
+    id: 54, type: "match",
+    text: "Match each type of data commonly used in data analysis with its value.",
+    choices: ["Boolean", "Float", "Integer", "String"],
+    pairs: [
+      { prompt: "1", answer: "Boolean" },
+      { prompt: "11", answer: "Integer" },
+      { prompt: "1.3", answer: "Float" },
+      { prompt: "1,2,3,4", answer: "String" }
+    ]
+  },
+  {
+    id: 55, type: "matrix",
+    text: "Analyze the 'MTA Ridership (Subway) | March 2025' dual-axis chart (x-axis: 2025-03-01 to 2025-03-31 in 5-day intervals; left y-axis: 0 to 6,000,000 Total Estimated Ridership; right y-axis: 0 to 125 % of Comparable Pre-Construction Start; ridership spikes up and down while trending downward).\nSelect True or False for each statement.",
+    choices: ["TRUE", "FALSE"],
+    rows: [
+      { prompt: "The x-axis has a consistent spacing for the whole dataset.", answer: "TRUE" },
+      { prompt: "The estimated ridership shows a steady and consistent rate of decline.", answer: "FALSE" },
+      { prompt: "Both y-axes represent population totals.", answer: "FALSE" }
+    ]
+  },
+  {
+    id: 56, type: "single",
+    text: "You have been given a large data set that includes location, income, and age.\nWhy should you disaggregate the data?",
+    options: [
+      "A. To combine data sets and present a summary of your findings about location, income, and age",
+      "B. To form generalizations about location, income, and age",
+      "C. To hide differences among age, location, and income",
+      "D. To analyze income within different age groups or locations"
+    ],
+    answer: 3
+  },
+  {
+    id: 57, type: "single",
+    text: "Which data type is appropriate for a phone number using the format (###) #### - ####?",
+    options: ["A. String", "B. Numeric", "C. Binary", "D. Boolean"],
+    answer: 0
+  },
+  {
+    id: 58, type: "matrix",
+    text: "You have a dataset of 100,000 rows cleaned of outliers. Approximately 100 rows contain NULL values in a numeric column.\nFor each statement about handling NULL, select Yes if it is a best practice or No if it is not.",
+    choices: ["Yes", "No"],
+    rows: [
+      { prompt: "Remove the rows that contain NULL values.", answer: "Yes" },
+      { prompt: "Replace each NULL value with a random value.", answer: "No" },
+      { prompt: "Use a statistic such as average to account for the NULL values.", answer: "Yes" }
+    ]
+  },
+  {
+    id: 59, type: "single",
+    text: "You are exporting data to a comma-delimited flat file. Because several columns include commas, you enclose those values in double quotes (\").\nWhat feature of delimited files defines enclosing column data in double quotes?",
+    options: ["A. Data formatter", "B. Text qualifier", "C. Row delimiter", "D. Column delimiter"],
+    answer: 1
+  },
+  {
+    id: 60, type: "single",
+    text: "You will be analyzing sales based on a large dataset (CustomerName, CustomerEmail, Birthdate, FirstPurchaseDate, MostRecentPurchaseDate, TotalQuantityPurchased, TotalSalesAmount). You need to validate the data before starting.\nWhat should you do?",
+    options: [
+      "A. Calculate statistics on Total Quantity Purchased.",
+      "B. Create aggregations of all numeric columns.",
+      "C. Analyze First Purchase Dates to determine purchasing trends.",
+      "D. Verify date ranges and values for all date columns."
+    ],
+    answer: 3
+  },
+  {
+    id: 61, type: "single",
+    text: "A data scientist creates a machine learning model to help the hiring manager select candidates from thousands of job applicants who are most likely to succeed in the job role.\nWhich statement best describes how machine learning is used in this scenario?",
+    options: [
+      "A. The hiring manager queries the machine learning database for qualified applicants.",
+      "B. The machine learning model uses historical data and algorithms to predict future applicant performance.",
+      "C. The machine learning system converts applicant information into a common format.",
+      "D. The machine learning model defines the qualifications necessary for a given job or role."
+    ],
+    answer: 1
+  },
+  {
+    id: 62, type: "match",
+    text: "Your marketing department tracks quantities of promotional items distributed (T-Shirts, Stuffed Animals, Drinkware, etc.). Complete the three sentences about data organization.",
+    choices: ["Appending", "Filtering", "Sorting", "Truncating"],
+    pairs: [
+      { prompt: "___ can arrange distributed items from highest to lowest.", answer: "Sorting" },
+      { prompt: "___ can limit the display of distributed items to greater than 500.", answer: "Filtering" },
+      { prompt: "___ can limit the display of promotional items to stuffed animals and t-shirts.", answer: "Filtering" }
+    ]
+  },
+  {
+    id: 63, type: "single",
+    text: "A bar chart shows Number of Sales (Salesperson 1: ~225,000; Salesperson 2: ~50,000). A conclusion states Salesperson 1 has a higher lead-to-sales rate (actual sales divided by attempted sales) than Salesperson 2.\nWhat should you conclude?",
+    options: [
+      "A. The conclusion is inaccurate because the visualization is missing sales lead data.",
+      "B. The conclusion is inaccurate because the visualization uses scale manipulation.",
+      "C. The conclusion is inaccurate because the visualization uses size manipulation.",
+      "D. The conclusion is accurate."
+    ],
+    answer: 0
+  },
+  {
+    id: 64, type: "multi",
+    text: "In the United States and Europe, which two data points are considered non-sensitive PII (personal identifiable information)? (Choose 2.)",
+    options: ["A. Job title", "B. Date of birth", "C. Bank account number", "D. Medical records"],
+    answer: [0, 1]
+  },
+  {
+    id: 65, type: "single",
+    text: "What type of data is too complex to be stored in a traditional database management system (DBMS)?",
+    options: ["A. Qualitative data", "B. Metadata", "C. Imputed data", "D. Big data"],
+    answer: 3
+  },
+  {
+    id: 66, type: "single",
+    text: "You want to know whether there is a significant difference between the average test scores of male and female students in the same class. Data is approximately normally distributed with similar variance.\nHow would you decide whether the difference is significant?",
+    options: [
+      "A. Perform a t-test using the means and variances for male and female students and if the p-value is less than 0.05, decide that the difference is significant.",
+      "B. Perform a t-test using the medians and variances for male and female students and if the p-value is greater than 0.05, decide that the difference is significant.",
+      "C. Perform a t-test using the means and variances for male and female students and if the p-value is greater than 0.05, decide that the difference is significant.",
+      "D. Perform a t-test using the medians and variances for male and female students and if the p-value is less than 0.05, decide that the difference is significant."
+    ],
+    answer: 0
+  },
+  {
+    id: 67, type: "single",
+    text: "You ran a t-test with an alpha value of 1% (α = 0.01).\nWhich p-value would cause you to reject the null hypothesis?",
+    options: ["A. 0.001", "B. 0.011", "C. 0.09", "D. 0.10"],
+    answer: 0
+  },
+  {
+    id: 68, type: "single",
+    text: "Using the restaurant menu items table (Item, Type, Menu, Gluten-Free, Vegan), what should you do to nondestructively limit the data display to only Dessert items with a Type of Cake?",
+    options: [
+      "A. Delete all data that has a Menu other than Dessert. Then delete all data that has a Type other than Cake.",
+      "B. Group the data by Menu and then group data on the Dessert menu by Type.",
+      "C. Add two slicers, one for Menu and one for Type. Set the Menu slicer to Dessert and the Type slicer to Cake.",
+      "D. Sort the data by Menu and within each Menu, sort by Type."
+    ],
+    answer: 2
+  }
+];
+
+let order = QUESTIONS.map((_, i) => i);
+let currentIdx = 0;
+let mode = "practice"; // 'practice' | 'exam'
+let examSubmitted = false;
+let userAnswers = {}; // q.id -> answer
+let checkedState = {}; // q.id -> boolean (correct)
+
+function setMode(newMode) {
+  mode = newMode;
+  document.getElementById("modePractice").classList.toggle("active", mode === "practice");
+  document.getElementById("modeExam").classList.toggle("active", mode === "exam");
+  resetQuiz();
+}
+
+function shuffleQuestions() {
+  for (let i = order.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [order[i], order[j]] = [order[j], order[i]];
+  }
+  currentIdx = 0;
+  render();
+}
+
+function resetQuiz() {
+  userAnswers = {};
+  checkedState = {};
+  examSubmitted = false;
+  currentIdx = 0;
+  render();
+}
+
+function isCorrect(q, ans) {
+  if (ans === undefined || ans === null) return false;
+  if (q.type === "single") return ans === q.answer;
+  if (q.type === "multi") {
+    if (!Array.isArray(ans) || ans.length !== q.answer.length) return false;
+    return q.answer.every(v => ans.includes(v));
+  }
+  if (q.type === "match") {
+    return q.pairs.every((p, i) => ans[i] === p.answer);
+  }
+  if (q.type === "matrix") {
+    return q.rows.every((r, i) => ans[i] === r.answer);
+  }
+  if (q.type === "input") {
+    const clean = String(ans).trim().toLowerCase().replace(/\s+/g, "");
+    return q.answer.some(a => a.toLowerCase() === clean);
+  }
+  return false;
+}
+
+function formatCorrectAnswer(q) {
+  if (q.type === "single") return q.options[q.answer];
+  if (q.type === "multi") return q.answer.map(i => q.options[i]).join(" | ");
+  if (q.type === "match") return q.pairs.map(p => `${p.prompt} → ${p.answer}`).join("; ");
+  if (q.type === "matrix") return q.rows.map(r => `${r.prompt} → ${r.answer}`).join("; ");
+  if (q.type === "input") return q.answer[1] || q.answer[0];
+}
+
+function checkCurrent() {
+  const q = QUESTIONS[order[currentIdx]];
+  checkedState[q.id] = isCorrect(q, userAnswers[q.id]);
+  render();
+}
+
+function submitExam() {
+  examSubmitted = true;
+  QUESTIONS.forEach(q => {
+    checkedState[q.id] = isCorrect(q, userAnswers[q.id]);
+  });
+  renderSummary();
+}
+
+function renderSummary() {
+  const total = QUESTIONS.length;
+  const correct = Object.values(checkedState).filter(Boolean).length;
+  const pct = Math.round((correct / total) * 100);
+  document.getElementById("quizCard").innerHTML = `
+    <div class="summary-box">
+      <h2>Exam Complete</h2>
+      <div class="summary-score">${correct} / ${total} (${pct}%)</div>
+      <p style="color: var(--muted); margin-bottom: 1.5rem;">Click any question number below to review your answers.</p>
+      <button class="primary" onclick="resetQuiz()">Try Again</button>
+    </div>
+  `;
+  renderNav();
+  updateStats();
+}
+
+function render() {
+  const q = QUESTIONS[order[currentIdx]];
+  const ans = userAnswers[q.id];
+  const isChecked = mode === "practice" ? (q.id in checkedState) : examSubmitted;
+  const card = document.getElementById("quizCard");
+
+  let html = `
+    <div class="q-meta">
+      <span class="q-num">Question #${q.id}</span>
+      <span class="q-badge">${q.type.toUpperCase()}</span>
+    </div>
+    <div class="q-text">${q.text}</div>
+  `;
+
+  if (q.code) html += `<div class="code-block">${q.code}</div>`;
+
+  if (q.table) {
+    html += `<table class="data-table"><thead><tr>${q.table.headers.map(h => `<th>${h}</th>`).join("")}</tr></thead><tbody>`;
+    html += q.table.rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join("")}</tr>`).join("");
+    html += `</tbody></table>`;
+  }
+
+  if (q.type === "single" || q.type === "multi") {
+    html += `<div class="options">`;
+    q.options.forEach((opt, idx) => {
+      const selected = q.type === "single" ? ans === idx : (Array.isArray(ans) && ans.includes(idx));
+      let cls = "opt-btn";
+      if (isChecked) {
+        const right = q.type === "single" ? q.answer === idx : q.answer.includes(idx);
+        if (right) cls += " correct";
+        else if (selected) cls += " wrong";
+      } else if (selected) {
+        cls += " selected";
+      }
+      html += `<button class="${cls}" ${isChecked ? "disabled" : ""} onclick="selectOption(${idx})">${opt}</button>`;
+    });
+    html += `</div>`;
+  } else if (q.type === "match") {
+    q.pairs.forEach((p, idx) => {
+      const val = (ans && ans[idx]) || "";
+      let cls = "match-row";
+      if (isChecked) cls += val === p.answer ? " correct" : " wrong";
+      html += `
+        <div class="${cls}">
+          <span>${p.prompt}</span>
+          <select ${isChecked ? "disabled" : ""} onchange="selectMatch(${idx}, this.value)">
+            <option value="">Select...</option>
+            ${q.choices.map(c => `<option value="${c}" ${val === c ? "selected" : ""}>${c}</option>`).join("")}
+          </select>
+        </div>
+      `;
+    });
+  } else if (q.type === "matrix") {
+    q.rows.forEach((r, idx) => {
+      const val = (ans && ans[idx]) || "";
+      let cls = "matrix-row";
+      if (isChecked) cls += val === r.answer ? " correct" : " wrong";
+      html += `
+        <div class="${cls}">
+          <span>${r.prompt}</span>
+          <div class="matrix-choices">
+            ${q.choices.map(c => `
+              <button class="${val === c ? "active" : ""}" ${isChecked ? "disabled" : ""} onclick="selectMatrix(${idx}, '${c}')">${c}</button>
+            `).join("")}
+          </div>
+        </div>
+      `;
+    });
+  } else if (q.type === "input") {
+    html += `<input class="text-input" type="text" placeholder="Type your answer..." value="${ans || ""}" ${isChecked ? "disabled" : ""} oninput="selectInput(this.value)" />`;
+  }
+
+  if (isChecked) {
+    const ok = checkedState[q.id];
+    html += `
+      <div class="feedback show ${ok ? "correct" : "wrong"}">
+        <strong>${ok ? "Correct!" : "Incorrect."}</strong>
+        ${!ok ? `<div style="margin-top:0.35rem;">Correct answer: ${formatCorrectAnswer(q)}</div>` : ""}
+      </div>
+    `;
+  }
+
+  html += `
+    <div class="actions">
+      <button onclick="prevQ()" ${currentIdx === 0 ? "disabled" : ""}>← Previous</button>
+      <div style="display:flex; gap:0.5rem;">
+        ${mode === "practice" && !isChecked ? `<button class="primary" onclick="checkCurrent()">Check Answer</button>` : ""}
+        ${mode === "exam" && !examSubmitted && currentIdx === order.length - 1 ? `<button class="primary" onclick="submitExam()">Submit Exam</button>` : ""}
+        ${currentIdx < order.length - 1 ? `<button class="${(isChecked || mode === 'exam') ? 'primary' : ''}" onclick="nextQ()">Next →</button>` : ""}
+      </div>
+    </div>
+  `;
+
+  card.innerHTML = html;
+  renderNav();
+  updateStats();
+}
+
+function selectOption(idx) {
+  const q = QUESTIONS[order[currentIdx]];
+  if (q.type === "single") {
+    userAnswers[q.id] = idx;
+  } else {
+    const arr = Array.isArray(userAnswers[q.id]) ? [...userAnswers[q.id]] : [];
+    const pos = arr.indexOf(idx);
+    if (pos >= 0) arr.splice(pos, 1);
+    else arr.push(idx);
+    userAnswers[q.id] = arr;
+  }
+  render();
+}
+
+function selectMatch(idx, val) {
+  const q = QUESTIONS[order[currentIdx]];
+  userAnswers[q.id] = userAnswers[q.id] || {};
+  userAnswers[q.id][idx] = val;
+}
+
+function selectMatrix(idx, val) {
+  const q = QUESTIONS[order[currentIdx]];
+  userAnswers[q.id] = userAnswers[q.id] || {};
+  userAnswers[q.id][idx] = val;
+  render();
+}
+
+function selectInput(val) {
+  const q = QUESTIONS[order[currentIdx]];
+  userAnswers[q.id] = val;
+}
+
+function prevQ() { if (currentIdx > 0) { currentIdx--; render(); } }
+function nextQ() { if (currentIdx < order.length - 1) { currentIdx++; render(); } }
+function jumpTo(i) { currentIdx = i; render(); }
+
+function renderNav() {
+  const grid = document.getElementById("navGrid");
+  grid.innerHTML = order.map((qIdx, i) => {
+    const q = QUESTIONS[qIdx];
+    let cls = "nav-dot";
+    if (i === currentIdx) cls += " current";
+    if (q.id in checkedState) cls += checkedState[q.id] ? " correct" : " wrong";
+    else if (userAnswers[q.id] !== undefined) cls += " answered";
+    return `<button class="${cls}" onclick="jumpTo(${i})">${q.id}</button>`;
+  }).join("");
+}
+
+function updateStats() {
+  document.getElementById("counterText").textContent = `Question ${currentIdx + 1} of ${order.length}`;
+  const checkedCount = Object.keys(checkedState).length;
+  const correctCount = Object.values(checkedState).filter(Boolean).length;
+  document.getElementById("scoreText").textContent = mode === "practice" || examSubmitted
+    ? `Score: ${correctCount} / ${checkedCount}`
+    : `Answered: ${Object.keys(userAnswers).length} / ${order.length}`;
+  document.getElementById("progressBar").style.width = `${((currentIdx + 1) / order.length) * 100}%`;
+}
+
+render();
+</script>
+</body>
+</html>
