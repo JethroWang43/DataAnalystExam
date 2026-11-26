@@ -94,6 +94,21 @@
     box-shadow: 0 1px 3px rgba(0,0,0,0.03);
   }
 
+  .review-card {
+    margin-bottom: 1.25rem;
+  }
+
+  .search-input {
+    width: 100%;
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    font-size: 0.95rem;
+    font-family: inherit;
+    margin-bottom: 1.25rem;
+    background: var(--surface);
+  }
+
   .q-meta {
     display: flex;
     justify-content: space-between;
@@ -144,7 +159,7 @@
   }
   .opt-btn:hover:not(:disabled) { border-color: var(--accent); background: #f8fafc; }
   .opt-btn.selected { border-color: var(--accent); background: #eff6ff; }
-  .opt-btn.correct { border-color: var(--correct-border); background: var(--correct-bg); color: var(--correct-text); }
+  .opt-btn.correct { border-color: var(--correct-border); background: var(--correct-bg); color: var(--correct-text); font-weight: 500; }
   .opt-btn.wrong { border-color: var(--wrong-border); background: var(--wrong-bg); color: var(--wrong-text); }
 
   .match-row, .matrix-row {
@@ -160,6 +175,17 @@
   }
   .match-row.correct, .matrix-row.correct { border-color: var(--correct-border); background: var(--correct-bg); }
   .match-row.wrong, .matrix-row.wrong { border-color: var(--wrong-border); background: var(--wrong-bg); }
+
+  .answer-pill {
+    font-size: 0.85rem;
+    font-weight: 600;
+    padding: 0.3rem 0.65rem;
+    border-radius: 6px;
+    background: var(--correct-bg);
+    border: 1px solid var(--correct-border);
+    color: var(--correct-text);
+    white-space: nowrap;
+  }
 
   .matrix-choices { display: flex; gap: 0.5rem; flex-shrink: 0; }
   .text-input {
@@ -214,6 +240,7 @@
 
   .summary-box { text-align: center; padding: 2rem 1rem; }
   .summary-score { font-size: 3rem; font-weight: 700; color: var(--accent); margin: 0.5rem 0; }
+  .hidden { display: none !important; }
 </style>
 </head>
 <body>
@@ -223,21 +250,28 @@
   <div class="controls">
     <button id="modePractice" class="active" onclick="setMode('practice')">Practice Mode</button>
     <button id="modeExam" onclick="setMode('exam')">Exam Mode</button>
+    <button id="modeReview" onclick="setMode('review')">Review Mode</button>
     <button onclick="shuffleQuestions()">Shuffle</button>
     <button onclick="resetQuiz()">Reset</button>
   </div>
 </header>
-<div class="progress-wrap"><div class="progress-bar" id="progressBar"></div></div>
+<div class="progress-wrap" id="progressWrap"><div class="progress-bar" id="progressBar"></div></div>
 
 <main>
-  <div class="stats-bar">
+  <div class="stats-bar" id="statsBar">
     <span id="counterText">Question 1 of 68</span>
     <span id="scoreText">Score: 0 / 0</span>
   </div>
 
+  <!-- Quiz View (Practice & Exam) -->
   <div class="card" id="quizCard"></div>
-
   <div class="nav-grid" id="navGrid"></div>
+
+  <!-- Review View (All Q&A Shown) -->
+  <div id="reviewContainer" class="hidden">
+    <input type="text" id="reviewSearch" class="search-input" placeholder="Search questions or answers (e.g., 'pseudonymization', '#28', 't-test')..." oninput="renderReview()" />
+    <div id="reviewList"></div>
+  </div>
 </main>
 
 <script>
@@ -884,16 +918,29 @@ const QUESTIONS = [
 
 let order = QUESTIONS.map((_, i) => i);
 let currentIdx = 0;
-let mode = "practice"; // 'practice' | 'exam'
+let mode = "practice"; // 'practice' | 'exam' | 'review'
 let examSubmitted = false;
-let userAnswers = {}; // q.id -> answer
-let checkedState = {}; // q.id -> boolean (correct)
+let userAnswers = {};
+let checkedState = {};
 
 function setMode(newMode) {
   mode = newMode;
   document.getElementById("modePractice").classList.toggle("active", mode === "practice");
   document.getElementById("modeExam").classList.toggle("active", mode === "exam");
-  resetQuiz();
+  document.getElementById("modeReview").classList.toggle("active", mode === "review");
+
+  const isReview = mode === "review";
+  document.getElementById("quizCard").classList.toggle("hidden", isReview);
+  document.getElementById("navGrid").classList.toggle("hidden", isReview);
+  document.getElementById("statsBar").classList.toggle("hidden", isReview);
+  document.getElementById("progressWrap").classList.toggle("hidden", isReview);
+  document.getElementById("reviewContainer").classList.toggle("hidden", !isReview);
+
+  if (isReview) {
+    renderReview();
+  } else {
+    resetQuiz();
+  }
 }
 
 function shuffleQuestions() {
@@ -902,7 +949,8 @@ function shuffleQuestions() {
     [order[i], order[j]] = [order[j], order[i]];
   }
   currentIdx = 0;
-  render();
+  if (mode === "review") renderReview();
+  else render();
 }
 
 function resetQuiz() {
@@ -910,7 +958,79 @@ function resetQuiz() {
   checkedState = {};
   examSubmitted = false;
   currentIdx = 0;
-  render();
+  if (mode === "review") {
+    document.getElementById("reviewSearch").value = "";
+    order = QUESTIONS.map((_, i) => i);
+    renderReview();
+  } else {
+    render();
+  }
+}
+
+function renderReview() {
+  const query = (document.getElementById("reviewSearch").value || "").trim().toLowerCase();
+  const list = document.getElementById("reviewList");
+
+  const filtered = order.map(idx => QUESTIONS[idx]).filter(q => {
+    if (!query) return true;
+    const hay = [
+      `#${q.id}`,
+      q.text,
+      q.code || "",
+      ...(q.options || []),
+      ...(q.pairs ? q.pairs.map(p => `${p.prompt} ${p.answer}`) : []),
+      ...(q.rows ? q.rows.map(r => `${r.prompt} ${r.answer}`) : []),
+      ...(Array.isArray(q.answer) ? q.answer.map(String) : [])
+    ].join(" ").toLowerCase();
+    return hay.includes(query);
+  });
+
+  if (filtered.length === 0) {
+    list.innerHTML = `<div class="card" style="text-align:center; color:var(--muted);">No matching questions found.</div>`;
+    return;
+  }
+
+  list.innerHTML = filtered.map(q => {
+    let body = `
+      <div class="q-meta">
+        <span class="q-num">Question #${q.id}</span>
+        <span class="q-badge">${q.type.toUpperCase()}</span>
+      </div>
+      <div class="q-text">${q.text}</div>
+    `;
+
+    if (q.code) body += `<div class="code-block">${q.code}</div>`;
+    if (q.table) {
+      body += `<table class="data-table"><thead><tr>${q.table.headers.map(h => `<th>${h}</th>`).join("")}</tr></thead><tbody>`;
+      body += q.table.rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join("")}</tr>`).join("");
+      body += `</tbody></table>`;
+    }
+
+    if (q.type === "single" || q.type === "multi") {
+      body += `<div class="options">` + q.options.map((opt, idx) => {
+        const right = q.type === "single" ? q.answer === idx : q.answer.includes(idx);
+        return `<div class="opt-btn ${right ? "correct" : ""}">${opt}</div>`;
+      }).join("") + `</div>`;
+    } else if (q.type === "match") {
+      body += q.pairs.map(p => `
+        <div class="match-row correct">
+          <span>${p.prompt}</span>
+          <span class="answer-pill">${p.answer}</span>
+        </div>
+      `).join("");
+    } else if (q.type === "matrix") {
+      body += q.rows.map(r => `
+        <div class="matrix-row correct">
+          <span>${r.prompt}</span>
+          <span class="answer-pill">${r.answer}</span>
+        </div>
+      `).join("");
+    } else if (q.type === "input") {
+      body += `<div class="feedback show correct"><strong>Answer:</strong> ${q.answer[1] || q.answer[0]}</div>`;
+    }
+
+    return `<div class="card review-card">${body}</div>`;
+  }).join("");
 }
 
 function isCorrect(q, ans) {
@@ -920,12 +1040,8 @@ function isCorrect(q, ans) {
     if (!Array.isArray(ans) || ans.length !== q.answer.length) return false;
     return q.answer.every(v => ans.includes(v));
   }
-  if (q.type === "match") {
-    return q.pairs.every((p, i) => ans[i] === p.answer);
-  }
-  if (q.type === "matrix") {
-    return q.rows.every((r, i) => ans[i] === r.answer);
-  }
+  if (q.type === "match") return q.pairs.every((p, i) => ans[i] === p.answer);
+  if (q.type === "matrix") return q.rows.every((r, i) => ans[i] === r.answer);
   if (q.type === "input") {
     const clean = String(ans).trim().toLowerCase().replace(/\s+/g, "");
     return q.answer.some(a => a.toLowerCase() === clean);
@@ -949,9 +1065,7 @@ function checkCurrent() {
 
 function submitExam() {
   examSubmitted = true;
-  QUESTIONS.forEach(q => {
-    checkedState[q.id] = isCorrect(q, userAnswers[q.id]);
-  });
+  QUESTIONS.forEach(q => { checkedState[q.id] = isCorrect(q, userAnswers[q.id]); });
   renderSummary();
 }
 
@@ -986,7 +1100,6 @@ function render() {
   `;
 
   if (q.code) html += `<div class="code-block">${q.code}</div>`;
-
   if (q.table) {
     html += `<table class="data-table"><thead><tr>${q.table.headers.map(h => `<th>${h}</th>`).join("")}</tr></thead><tbody>`;
     html += q.table.rows.map(r => `<tr>${r.map(c => `<td>${c}</td>`).join("")}</tr>`).join("");
